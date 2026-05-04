@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import { serviceManager, BUILTIN_SERVICES } from './services'
+import { startApiServer } from './api-server'
 
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -43,7 +44,7 @@ function setupIPC(): void {
   })
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   setupIPC()
 
   const mainWindow = createWindow()
@@ -58,6 +59,13 @@ app.whenReady().then(() => {
   mainWindow.on('resize', () => {
     serviceManager.relayout()
   })
+
+  // Start the API server
+  try {
+    await startApiServer()
+  } catch (err) {
+    console.error('Failed to start API server:', err)
+  }
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
