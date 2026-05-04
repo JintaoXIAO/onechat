@@ -169,8 +169,8 @@ export class ServiceManager {
   private layoutServiceView(view: WebContentsView): void {
     if (!this.mainWindow) return
     const bounds = this.mainWindow.getContentBounds()
-    // Leave space for the sidebar (256px = w-64 in Tailwind)
-    const sidebarWidth = 256
+    // Leave space for the narrow icon sidebar (56px = w-14 in Tailwind)
+    const sidebarWidth = 56
     view.setBounds({
       x: sidebarWidth,
       y: 0,
