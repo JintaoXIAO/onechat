@@ -156,60 +156,54 @@ export class DeepSeekBridge extends BaseBridge {
             let lastText = '';
             let idleTimer = null;
             let settled = false;
+            let hasStarted = false;
 
-            console.log('[OneChat] DeepSeek observing document.body for response');
+            console.log('[OneChat] DeepSeek observing for response');
 
             const getAssistantText = () => {
-              // DeepSeek renders markdown in response blocks
-              const markdowns = document.querySelectorAll('[class*="markdown"]');
-              if (markdowns.length === 0) {
-                // Fallback: look for message containers
-                const msgs = document.querySelectorAll('[class*="message"]');
-                if (msgs.length === 0) return '';
-                const last = msgs[msgs.length - 1];
-                return last.innerText || '';
-              }
+              // DeepSeek uses: div.ds-message > div.ds-markdown for AI responses
+              const markdowns = document.querySelectorAll('.ds-message .ds-markdown');
+              if (markdowns.length === 0) return '';
               const lastMarkdown = markdowns[markdowns.length - 1];
               return lastMarkdown.innerText || lastMarkdown.textContent || '';
             };
 
-            const observer = new MutationObserver(() => {
-              if (settled) return;
+            // Use both MutationObserver AND polling because DeepSeek
+            // does a route navigation after sending, which can cause
+            // the observer to miss the initial content appearing.
+            const pollInterval = setInterval(() => {
+              if (settled) { clearInterval(pollInterval); return; }
 
               const currentText = getAssistantText();
               if (currentText && currentText !== lastText) {
+                hasStarted = true;
                 const newChunk = currentText.slice(lastText.length);
                 if (newChunk) {
                   ipcRenderer.send('deepseek-stream-chunk-' + reqId, newChunk);
                 }
                 lastText = currentText;
-              }
 
-              if (idleTimer) clearTimeout(idleTimer);
-              idleTimer = setTimeout(() => {
-                const finalText = getAssistantText();
-                if (finalText && finalText !== lastText) {
-                  const remaining = finalText.slice(lastText.length);
-                  if (remaining) {
-                    ipcRenderer.send('deepseek-stream-chunk-' + reqId, remaining);
+                // Reset idle timer
+                if (idleTimer) clearTimeout(idleTimer);
+                idleTimer = setTimeout(() => {
+                  // Final check
+                  const finalText = getAssistantText();
+                  if (finalText && finalText !== lastText) {
+                    ipcRenderer.send('deepseek-stream-chunk-' + reqId, finalText.slice(lastText.length));
                   }
-                }
-                settled = true;
-                observer.disconnect();
-                ipcRenderer.send('deepseek-stream-done-' + reqId);
-              }, 3000);
-            });
+                  settled = true;
+                  clearInterval(pollInterval);
+                  ipcRenderer.send('deepseek-stream-done-' + reqId);
+                }, 3000);
+              }
+            }, 500);
 
-            observer.observe(document.body, {
-              childList: true,
-              subtree: true,
-              characterData: true
-            });
-
+            // Timeout after 90 seconds
             setTimeout(() => {
               if (!settled) {
                 settled = true;
-                observer.disconnect();
+                clearInterval(pollInterval);
+                if (idleTimer) clearTimeout(idleTimer);
                 if (lastText) {
                   ipcRenderer.send('deepseek-stream-done-' + reqId);
                 } else {

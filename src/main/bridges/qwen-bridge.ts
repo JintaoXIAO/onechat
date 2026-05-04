@@ -1,12 +1,17 @@
-import { ipcMain } from 'electron'
+import { ipcMain, WebContentsView } from 'electron'
 import { BaseBridge } from './base-bridge'
 import { ChatMessage } from './types'
 
 /**
  * Qwen (通义千问) Bridge
  *
- * Strategy: DOM manipulation + MutationObserver
- * Similar approach to Kimi but adapted to Qwen's page structure.
+ * Strategy: Electron sendInputEvent for typing + polling for response
+ * Qwen's framework ignores programmatic DOM changes. We must use Electron's
+ * native input simulation to trigger real keyboard events that the framework detects.
+ *
+ * - Input: div[contenteditable] (rich text editor)
+ * - Send: Enter key via sendInputEvent (button stays disabled with DOM manipulation)
+ * - Response: div.chat-answers-card-wrap
  */
 export class QwenBridge extends BaseBridge {
   readonly serviceId = 'qwen'
@@ -17,10 +22,10 @@ export class QwenBridge extends BaseBridge {
       throw new Error('QwenBridge: No view attached')
     }
 
-    // Wait for the chat interface to load
-    await this.waitForElement('textarea', 15000)
+    // Wait for the chat editor to appear
+    await this.waitForElement('[contenteditable="true"]', 15000)
 
-    // Inject the bridge script
+    // Inject the bridge script (only for response observation)
     await this.injectBridgeScript()
     this.ready = true
   }
@@ -62,16 +67,60 @@ export class QwenBridge extends BaseBridge {
   }
 
   private async executeSend(text: string, reqId: number): Promise<void> {
-    const script = `
-      (async () => {
-        try {
-          await window.__onechat_bridge.sendMessage(${JSON.stringify(text)}, ${reqId});
-        } catch(e) {
-          window.ipcRenderer.send('qwen-stream-error-${reqId}', e.message || 'Unknown error');
-        }
-      })();
-    `
-    await this.executeScript(script)
+    if (!this.view) throw new Error('No view')
+
+    const webContents = this.view.webContents
+
+    // Focus the editor
+    await this.executeScript(`
+      (() => {
+        const editor = document.querySelector('[contenteditable="true"]');
+        if (editor) { editor.focus(); editor.innerHTML = ''; }
+      })()
+    `)
+
+    await new Promise(r => setTimeout(r, 200))
+
+    // Use Electron's native input event to type each character
+    // This simulates real keyboard input that frameworks can detect
+    for (const char of text) {
+      webContents.sendInputEvent({
+        type: 'keyDown',
+        keyCode: char
+      })
+      webContents.sendInputEvent({
+        type: 'char',
+        keyCode: char
+      })
+      webContents.sendInputEvent({
+        type: 'keyUp',
+        keyCode: char
+      })
+      // Small delay between characters to not overwhelm
+      await new Promise(r => setTimeout(r, 10))
+    }
+
+    // Wait for the framework to process and enable send button
+    await new Promise(r => setTimeout(r, 500))
+
+    // Press Enter to send
+    webContents.sendInputEvent({
+      type: 'keyDown',
+      keyCode: 'Return'
+    })
+    webContents.sendInputEvent({
+      type: 'char',
+      keyCode: '\r'
+    })
+    webContents.sendInputEvent({
+      type: 'keyUp',
+      keyCode: 'Return'
+    })
+
+    // Start observing for response via injected script
+    await this.executeScript(`
+      window.__onechat_bridge.observeResponse(${reqId});
+    `)
   }
 
   private async injectBridgeScript(): Promise<void> {
@@ -82,116 +131,64 @@ export class QwenBridge extends BaseBridge {
         const ipcRenderer = window.ipcRenderer;
 
         window.__onechat_bridge = {
-          currentReqId: null,
-
-          async sendMessage(text, reqId) {
-            this.currentReqId = reqId;
-
-            // Qwen uses a textarea for input
-            const editor = document.querySelector('textarea')
-              || document.querySelector('[contenteditable="true"]');
-
-            if (!editor) {
-              ipcRenderer.send('qwen-stream-error-' + reqId, 'Cannot find input element');
-              return;
-            }
-
-            // Fill the input
-            if (editor.tagName === 'TEXTAREA') {
-              const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                window.HTMLTextAreaElement.prototype, 'value'
-              )?.set;
-              nativeInputValueSetter?.call(editor, text);
-              editor.dispatchEvent(new Event('input', { bubbles: true }));
-              editor.dispatchEvent(new Event('change', { bubbles: true }));
-            } else {
-              editor.textContent = text;
-              editor.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-
-            await new Promise(r => setTimeout(r, 200));
-
-            // Find and click the send button
-            const sendBtn = document.querySelector('[class*="send"]')
-              || document.querySelector('[data-testid*="send"]')
-              || document.querySelector('button[class*="submit"]')
-              || [...document.querySelectorAll('button')].find(
-                  b => b.querySelector('svg') && !b.disabled
-                );
-
-            if (sendBtn && !sendBtn.disabled) {
-              sendBtn.click();
-            } else {
-              // Try Enter key
-              editor.dispatchEvent(new KeyboardEvent('keydown', {
-                key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true
-              }));
-            }
-
-            this.observeResponse(reqId);
-          },
-
           observeResponse(reqId) {
             let lastText = '';
             let idleTimer = null;
             let settled = false;
 
-            // Find the conversation/message container
-            const responseContainer = document.querySelector('[class*="chat-content"]')
-              || document.querySelector('[class*="message-list"]')
-              || document.querySelector('[class*="conversation"]')
-              || document.querySelector('main');
+            console.log('[OneChat] Qwen observing for response');
 
-            if (!responseContainer) {
-              ipcRenderer.send('qwen-stream-error-' + reqId, 'Cannot find response container');
-              return;
-            }
-
-            const getLastAssistantText = () => {
-              const messages = responseContainer.querySelectorAll('[class*="message"]');
-              if (messages.length === 0) return '';
-              const lastMsg = messages[messages.length - 1];
-              return lastMsg.textContent || '';
+            const getAssistantText = () => {
+              // Qwen uses: div.chat-answers-card-wrap for AI responses
+              const answers = document.querySelectorAll('.chat-answers-card-wrap');
+              if (answers.length === 0) {
+                const cards = document.querySelectorAll('.answer-common-card');
+                if (cards.length === 0) return '';
+                const last = cards[cards.length - 1];
+                return last.innerText || '';
+              }
+              const lastAnswer = answers[answers.length - 1];
+              return lastAnswer.innerText || lastAnswer.textContent || '';
             };
 
-            const observer = new MutationObserver(() => {
-              if (settled) return;
+            // Use polling since Qwen may do route navigation
+            const pollInterval = setInterval(() => {
+              if (settled) { clearInterval(pollInterval); return; }
 
-              const currentText = getLastAssistantText();
+              const currentText = getAssistantText();
               if (currentText && currentText !== lastText) {
                 const newChunk = currentText.slice(lastText.length);
                 if (newChunk) {
                   ipcRenderer.send('qwen-stream-chunk-' + reqId, newChunk);
                 }
                 lastText = currentText;
+
+                if (idleTimer) clearTimeout(idleTimer);
+                idleTimer = setTimeout(() => {
+                  const finalText = getAssistantText();
+                  if (finalText && finalText !== lastText) {
+                    ipcRenderer.send('qwen-stream-chunk-' + reqId, finalText.slice(lastText.length));
+                  }
+                  settled = true;
+                  clearInterval(pollInterval);
+                  ipcRenderer.send('qwen-stream-done-' + reqId);
+                }, 3000);
               }
+            }, 500);
 
-              if (idleTimer) clearTimeout(idleTimer);
-              idleTimer = setTimeout(() => {
-                settled = true;
-                observer.disconnect();
-                ipcRenderer.send('qwen-stream-done-' + reqId);
-              }, 2000);
-            });
-
-            observer.observe(responseContainer, {
-              childList: true,
-              subtree: true,
-              characterData: true
-            });
-
-            // Timeout after 60 seconds
+            // Timeout after 90 seconds
             setTimeout(() => {
               if (!settled) {
                 settled = true;
-                observer.disconnect();
+                clearInterval(pollInterval);
+                if (idleTimer) clearTimeout(idleTimer);
                 if (lastText) {
                   ipcRenderer.send('qwen-stream-done-' + reqId);
                 } else {
                   ipcRenderer.send('qwen-stream-error-' + reqId, 'Response timeout');
                 }
               }
-            }, 60000);
+            }, 90000);
           }
         };
       })();
