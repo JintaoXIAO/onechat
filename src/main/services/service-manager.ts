@@ -1,11 +1,14 @@
 import { BrowserWindow, WebContentsView, session } from 'electron'
 import { join } from 'path'
 import { ServiceConfig, ServiceState } from './types'
+import { Bridge } from '../bridges'
+import { KimiBridge } from '../bridges/kimi-bridge'
 
 export class ServiceManager {
   private views: Map<string, WebContentsView> = new Map()
   private configs: Map<string, ServiceConfig> = new Map()
   private states: Map<string, ServiceState> = new Map()
+  private bridges: Map<string, Bridge> = new Map()
   private mainWindow: BrowserWindow | null = null
   private activeServiceId: string | null = null
 
@@ -24,9 +27,10 @@ export class ServiceManager {
     const view = new WebContentsView({
       webPreferences: {
         session: ses,
-        preload: join(__dirname, '../preload/index.js'),
+        preload: join(__dirname, '../preload/bridge.js'),
         sandbox: false,
-        contextIsolation: true
+        contextIsolation: false,
+        nodeIntegration: false
       }
     })
 
@@ -44,6 +48,8 @@ export class ServiceManager {
 
     view.webContents.on('did-finish-load', () => {
       this.updateState(config.id, { status: 'ready' })
+      // Initialize bridge after page loads
+      this.initializeBridge(config.id, view)
     })
 
     view.webContents.on('did-fail-load', () => {
@@ -114,12 +120,39 @@ export class ServiceManager {
     return this.views.get(id)
   }
 
+  getBridge(id: string): Bridge | undefined {
+    return this.bridges.get(id)
+  }
+
   /** Reposition the service view when window resizes */
   relayout(): void {
     if (!this.activeServiceId) return
     const view = this.views.get(this.activeServiceId)
     if (view) {
       this.layoutServiceView(view)
+    }
+  }
+
+  private async initializeBridge(serviceId: string, view: WebContentsView): Promise<void> {
+    let bridge: Bridge | undefined
+
+    switch (serviceId) {
+      case 'kimi': {
+        const kimiBridge = new KimiBridge()
+        kimiBridge.setView(view)
+        bridge = kimiBridge
+        break
+      }
+      // Other bridges will be added here
+    }
+
+    if (bridge) {
+      try {
+        await bridge.initialize()
+        this.bridges.set(serviceId, bridge)
+      } catch (err) {
+        console.error(`Failed to initialize bridge for ${serviceId}:`, err)
+      }
     }
   }
 
