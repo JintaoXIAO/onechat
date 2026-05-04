@@ -26,13 +26,13 @@ export const BUILTIN_SERVICES: ServiceConfig[] = [
     url: 'https://tongyi.aliyun.com/qianwen'
   },
   {
-    id: 'chatgpt',
-    name: 'ChatGPT',
-    url: 'https://chatgpt.com'
+    id: 'deepseek',
+    name: 'DeepSeek',
+    url: 'https://chat.deepseek.com'
   },
   {
-    id: 'claude',
-    name: 'Claude',
-    url: 'https://claude.ai'
+    id: 'chatglm',
+    name: 'ChatGLM',
+    url: 'https://chatglm.cn'
   }
 ]
