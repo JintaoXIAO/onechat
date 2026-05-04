@@ -157,9 +157,12 @@ export class ServiceManager {
       try {
         await bridge.initialize()
         this.bridges.set(serviceId, bridge)
+        console.log(`[Bridge] ${serviceId} initialized successfully`)
       } catch (err) {
-        console.error(`Failed to initialize bridge for ${serviceId}:`, err)
+        console.error(`[Bridge] Failed to initialize ${serviceId}:`, err)
       }
+    } else {
+      console.log(`[Bridge] No bridge implementation for ${serviceId}`)
     }
   }
 

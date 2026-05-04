@@ -5,9 +5,11 @@ import { ChatMessage } from './types'
 /**
  * Kimi (Moonshot) Bridge
  *
- * Strategy: Network interception via in-page fetch hook.
- * Kimi's chat uses a streaming API endpoint. We intercept the native fetch
- * to capture the streaming response, and also manipulate the DOM to send messages.
+ * Strategy: DOM manipulation + MutationObserver
+ * Kimi's page uses:
+ *   - Input: div.chat-input-editor (contenteditable)
+ *   - Send button: element within div.chat-editor-action (not a <button>)
+ *   - Response container: elements with class containing "message" or "segment"
  */
 export class KimiBridge extends BaseBridge {
   readonly serviceId = 'kimi'
@@ -18,10 +20,10 @@ export class KimiBridge extends BaseBridge {
       throw new Error('KimiBridge: No view attached')
     }
 
-    // Wait for the chat interface to load
-    await this.waitForElement('[class*="chat"]', 15000)
+    // Wait for the chat input editor to appear
+    await this.waitForElement('.chat-input-editor', 15000)
 
-    // Inject the bridge script that hooks into the page
+    // Inject the bridge script
     await this.injectBridgeScript()
     this.ready = true
   }
@@ -30,29 +32,19 @@ export class KimiBridge extends BaseBridge {
     const { iterable, push, done, error } = this.createStream()
     const reqId = ++this.requestId
 
-    // Get the last user message to send
     const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')
     if (!lastUserMessage) {
       setTimeout(() => error(new Error('No user message provided')), 0)
       return iterable
     }
 
-    // Set up IPC listener for this specific request's streaming chunks
     const chunkChannel = `kimi-stream-chunk-${reqId}`
     const doneChannel = `kimi-stream-done-${reqId}`
     const errorChannel = `kimi-stream-error-${reqId}`
 
-    const chunkHandler = (_event: unknown, chunk: string) => {
-      push(chunk)
-    }
-    const doneHandler = () => {
-      cleanup()
-      done()
-    }
-    const errorHandler = (_event: unknown, errMsg: string) => {
-      cleanup()
-      error(new Error(errMsg))
-    }
+    const chunkHandler = (_event: unknown, chunk: string) => push(chunk)
+    const doneHandler = () => { cleanup(); done() }
+    const errorHandler = (_event: unknown, errMsg: string) => { cleanup(); error(new Error(errMsg)) }
 
     const cleanup = () => {
       ipcMain.removeListener(chunkChannel, chunkHandler)
@@ -64,7 +56,6 @@ export class KimiBridge extends BaseBridge {
     ipcMain.on(doneChannel, doneHandler)
     ipcMain.on(errorChannel, errorHandler)
 
-    // Execute the send command in the page
     this.executeSend(lastUserMessage.content, reqId).catch((err) => {
       cleanup()
       error(err)
@@ -87,12 +78,9 @@ export class KimiBridge extends BaseBridge {
   }
 
   private async injectBridgeScript(): Promise<void> {
-    // This script runs in the Kimi webpage context.
-    // It hooks fetch to intercept streaming responses and provides
-    // a sendMessage method that triggers the chat input.
     const script = `
       (() => {
-        if (window.__onechat_bridge) return; // Already injected
+        if (window.__onechat_bridge) return;
 
         const ipcRenderer = window.ipcRenderer;
 
@@ -102,82 +90,92 @@ export class KimiBridge extends BaseBridge {
           async sendMessage(text, reqId) {
             this.currentReqId = reqId;
 
-            // Find the textarea/input and fill it
-            const editor = document.querySelector('[class*="editor"]') 
-              || document.querySelector('textarea')
-              || document.querySelector('[contenteditable="true"]');
-            
+            // Kimi uses div.chat-input-editor with contenteditable
+            const editor = document.querySelector('.chat-input-editor');
+
             if (!editor) {
-              ipcRenderer.send('kimi-stream-error-' + reqId, 'Cannot find input element');
+              ipcRenderer.send('kimi-stream-error-' + reqId, 'Cannot find .chat-input-editor');
               return;
             }
 
-            // Set the value using input events for React to pick up
-            if (editor.tagName === 'TEXTAREA' || editor.tagName === 'INPUT') {
-              const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                window.HTMLTextAreaElement.prototype, 'value'
-              )?.set || Object.getOwnPropertyDescriptor(
-                window.HTMLInputElement.prototype, 'value'
-              )?.set;
-              nativeInputValueSetter?.call(editor, text);
-              editor.dispatchEvent(new Event('input', { bubbles: true }));
-            } else {
-              // contenteditable
-              editor.textContent = text;
-              editor.dispatchEvent(new Event('input', { bubbles: true }));
+            // Focus the editor
+            editor.focus();
+
+            // Clear existing content
+            editor.innerHTML = '';
+
+            // Use execCommand to insert text — this simulates real user typing
+            // and triggers all the framework's internal event handlers
+            document.execCommand('insertText', false, text);
+
+            // Also dispatch input event as backup
+            editor.dispatchEvent(new Event('input', { bubbles: true }));
+
+            // Wait for the framework to process and enable the send button
+            await new Promise(r => setTimeout(r, 500));
+
+            // Now look for the send button (should be enabled after content is set)
+            // Try multiple strategies to find it
+            let sendClicked = false;
+
+            // Strategy 1: Look for element with "send" in class name
+            const sendByClass = document.querySelector('[class*="send"]:not([disabled])');
+            if (sendByClass) {
+              sendByClass.click();
+              sendClicked = true;
             }
 
-            // Small delay then click send button
-            await new Promise(r => setTimeout(r, 100));
+            // Strategy 2: Look inside .chat-editor-action for clickable elements
+            if (!sendClicked) {
+              const actionArea = document.querySelector('.chat-editor-action');
+              if (actionArea) {
+                // Find the last icon/button-like element (usually the send icon)
+                const clickables = actionArea.querySelectorAll('svg, [role="button"], [class*="icon"], [class*="btn"]');
+                if (clickables.length > 0) {
+                  const sendIcon = clickables[clickables.length - 1];
+                  (sendIcon.closest('[class*="send"]') || sendIcon.parentElement || sendIcon).click();
+                  sendClicked = true;
+                }
+              }
+            }
 
-            const sendBtn = document.querySelector('[class*="send"]')
-              || document.querySelector('button[data-testid*="send"]')
-              || [...document.querySelectorAll('button')].find(
-                  b => b.textContent?.includes('发送') || b.querySelector('svg')
-                );
-
-            if (sendBtn && !sendBtn.disabled) {
-              sendBtn.click();
-            } else {
-              // Try pressing Enter
+            // Strategy 3: Enter key as final fallback
+            if (!sendClicked) {
               editor.dispatchEvent(new KeyboardEvent('keydown', {
-                key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true
+                key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true
               }));
             }
 
-            // Start observing the response area for changes
+            // Start observing for response
             this.observeResponse(reqId);
           },
 
           observeResponse(reqId) {
-            // Use MutationObserver to watch for new response content
             let lastText = '';
             let idleTimer = null;
             let settled = false;
 
-            const responseContainer = document.querySelector('[class*="message-list"]')
-              || document.querySelector('[class*="conversation"]')
-              || document.querySelector('main');
+            // Kimi navigates to a chat-detail page after sending.
+            // The response lives in: div.segment > div.segment-content-box > div.markdown-container
+            // We need to observe document.body since the container may not exist yet.
+            const observeTarget = document.body;
 
-            if (!responseContainer) {
-              ipcRenderer.send('kimi-stream-error-' + reqId, 'Cannot find response container');
-              return;
-            }
+            console.log('[OneChat] observing document.body for .markdown-container changes');
 
-            const getLastAssistantText = () => {
-              // Get the last assistant message block
-              const messages = responseContainer.querySelectorAll('[class*="message"]');
-              if (messages.length === 0) return '';
-              const lastMsg = messages[messages.length - 1];
-              // Skip if it's the user's message
-              if (lastMsg.querySelector('[class*="user"]')) return '';
-              return lastMsg.textContent || '';
+            const getAssistantText = () => {
+              // Find all assistant response blocks (markdown containers within segments)
+              const markdowns = document.querySelectorAll('.segment .markdown-container');
+              if (markdowns.length === 0) return '';
+
+              // Get the last markdown container — that's the latest AI response
+              const lastMarkdown = markdowns[markdowns.length - 1];
+              return lastMarkdown.innerText || lastMarkdown.textContent || '';
             };
 
             const observer = new MutationObserver(() => {
               if (settled) return;
 
-              const currentText = getLastAssistantText();
+              const currentText = getAssistantText();
               if (currentText && currentText !== lastText) {
                 const newChunk = currentText.slice(lastText.length);
                 if (newChunk) {
@@ -186,23 +184,30 @@ export class KimiBridge extends BaseBridge {
                 lastText = currentText;
               }
 
-              // Reset idle timer
+              // Reset idle timer — if no mutations for 3s, response is complete
               if (idleTimer) clearTimeout(idleTimer);
               idleTimer = setTimeout(() => {
-                // No mutations for 2 seconds = response complete
+                // Final read
+                const finalText = getAssistantText();
+                if (finalText && finalText !== lastText) {
+                  const remaining = finalText.slice(lastText.length);
+                  if (remaining) {
+                    ipcRenderer.send('kimi-stream-chunk-' + reqId, remaining);
+                  }
+                }
                 settled = true;
                 observer.disconnect();
                 ipcRenderer.send('kimi-stream-done-' + reqId);
-              }, 2000);
+              }, 3000);
             });
 
-            observer.observe(responseContainer, {
+            observer.observe(observeTarget, {
               childList: true,
               subtree: true,
               characterData: true
             });
 
-            // Timeout after 60 seconds
+            // Timeout after 90 seconds
             setTimeout(() => {
               if (!settled) {
                 settled = true;
@@ -210,10 +215,10 @@ export class KimiBridge extends BaseBridge {
                 if (lastText) {
                   ipcRenderer.send('kimi-stream-done-' + reqId);
                 } else {
-                  ipcRenderer.send('kimi-stream-error-' + reqId, 'Response timeout');
+                  ipcRenderer.send('kimi-stream-error-' + reqId, 'Response timeout - no .markdown-container found');
                 }
               }
-            }, 60000);
+            }, 90000);
           }
         };
       })();
