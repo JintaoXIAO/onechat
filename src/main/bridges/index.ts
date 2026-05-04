@@ -1,4 +1,6 @@
 export { BaseBridge } from './base-bridge'
 export { KimiBridge } from './kimi-bridge'
 export { QwenBridge } from './qwen-bridge'
+export { DeepSeekBridge } from './deepseek-bridge'
+export { ChatGLMBridge } from './chatglm-bridge'
 export type { Bridge, ChatMessage, BridgeEvents } from './types'

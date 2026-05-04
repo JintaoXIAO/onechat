@@ -4,6 +4,8 @@ import { ServiceConfig, ServiceState } from './types'
 import { Bridge } from '../bridges'
 import { KimiBridge } from '../bridges/kimi-bridge'
 import { QwenBridge } from '../bridges/qwen-bridge'
+import { DeepSeekBridge } from '../bridges/deepseek-bridge'
+import { ChatGLMBridge } from '../bridges/chatglm-bridge'
 
 export class ServiceManager {
   private views: Map<string, WebContentsView> = new Map()
@@ -150,7 +152,18 @@ export class ServiceManager {
         bridge = qwenBridge
         break
       }
-      // Other bridges will be added here
+      case 'deepseek': {
+        const deepseekBridge = new DeepSeekBridge()
+        deepseekBridge.setView(view)
+        bridge = deepseekBridge
+        break
+      }
+      case 'chatglm': {
+        const chatglmBridge = new ChatGLMBridge()
+        chatglmBridge.setView(view)
+        bridge = chatglmBridge
+        break
+      }
     }
 
     if (bridge) {
