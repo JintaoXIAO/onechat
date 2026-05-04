@@ -2,10 +2,17 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 const api = {
-  // Will be expanded with Bridge communication methods
   getServices: () => ipcRenderer.invoke('get-services'),
-  sendMessage: (serviceId: string, message: string) =>
-    ipcRenderer.invoke('send-message', serviceId, message)
+  showService: (serviceId: string) => ipcRenderer.invoke('show-service', serviceId),
+  hideService: (serviceId: string) => ipcRenderer.invoke('hide-service', serviceId),
+  getActiveService: () => ipcRenderer.invoke('get-active-service'),
+  onServiceStateChanged: (callback: (services: unknown[]) => void) => {
+    const listener = (_event: unknown, services: unknown[]) => callback(services)
+    ipcRenderer.on('service-state-changed', listener)
+    return () => {
+      ipcRenderer.removeListener('service-state-changed', listener)
+    }
+  }
 }
 
 if (process.contextIsolated) {

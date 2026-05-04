@@ -4,12 +4,14 @@
   "description": "AI chat aggregator - unify multiple AI services and expose them as OpenAI-compatible API",
   "main": "./out/main/index.js",
   "scripts": {
+    "postinstall": "electron-vite build",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx"
   },
+  "trustedDependencies": ["electron"],
   "dependencies": {
     "fastify": "^5.3.3"
   },

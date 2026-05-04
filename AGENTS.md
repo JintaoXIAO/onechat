@@ -53,6 +53,7 @@ All commands use `bun run`. Do NOT use `npm` or `npx` — Node.js is not install
 
 ## Gotchas
 
+- **Electron binary**: Bun does not auto-run postinstall scripts by default. Electron is listed in `trustedDependencies` in package.json so `bun install` downloads the binary. If `electron/dist/electron.exe` is missing, run: `$env:ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/"; bun run node_modules/electron/install.js`
 - `bun run typecheck` uses the composite TS setup — `tsc --noEmit` must be run from root
 - Renderer code lives at `src/renderer/src/` (note the nested `src/`), HTML entry is at `src/renderer/index.html`
 - Electron is a devDependency but ships its own Node.js runtime — build artifacts in `out/` use Electron's Node
