@@ -2,7 +2,7 @@
 
 ## What is this
 
-AI chat aggregator built on Electron. Loads AI web services (Kimi, Qwen, ChatGPT, etc.) in hidden BrowserViews, injects bridge scripts to control them, and exposes a local OpenAI-compatible HTTP API so other tools can use these services programmatically.
+AI chat aggregator built on Electron. Loads AI web services (Kimi, Qwen, DeepSeek, ChatGLM) in BrowserViews, injects bridge scripts to control them, and exposes a local OpenAI-compatible HTTP API so other tools can use these services programmatically.
 
 ## Tech stack
 
@@ -20,6 +20,7 @@ src/
   main/           # Electron main process (entry: index.ts)
     api-server/   # Fastify local HTTP server (OpenAI-compatible endpoints)
     bridges/      # Per-service bridge implementations
+    services/     # ServiceManager + service config/state types
   preload/        # Preload scripts (index.ts for UI, bridge.ts for AI webviews)
   renderer/       # React UI (entry: src/main.tsx, root: index.html)
 out/              # Build output (gitignored)
@@ -58,3 +59,6 @@ All commands use `bun run`. Do NOT use `npm` or `npx` — Node.js is not install
 - Renderer code lives at `src/renderer/src/` (note the nested `src/`), HTML entry is at `src/renderer/index.html`
 - Electron is a devDependency but ships its own Node.js runtime — build artifacts in `out/` use Electron's Node
 - The `@electron-toolkit/utils` export `is.dev` checks `ELECTRON_RENDERER_URL` env var set by electron-vite in dev mode
+- **Bridge DOM selectors are fragile**: AI services update their frontends frequently. When a bridge breaks, use the `diagnose-service` IPC handler to inspect the current DOM structure, then update selectors accordingly.
+- **Service views use `contextIsolation: false`**: The bridge preload (`src/preload/bridge.ts`) exposes `window.ipcRenderer` so injected scripts can send IPC messages back to main process.
+- **Kimi specifics**: Input is `div.chat-input-editor` (contenteditable); use `document.execCommand('insertText')` to trigger framework reactivity; responses appear in `.segment .markdown-container` after a route navigation.
