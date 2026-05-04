@@ -3,6 +3,7 @@ import { join } from 'path'
 import { ServiceConfig, ServiceState } from './types'
 import { Bridge } from '../bridges'
 import { KimiBridge } from '../bridges/kimi-bridge'
+import { QwenBridge } from '../bridges/qwen-bridge'
 
 export class ServiceManager {
   private views: Map<string, WebContentsView> = new Map()
@@ -141,6 +142,12 @@ export class ServiceManager {
         const kimiBridge = new KimiBridge()
         kimiBridge.setView(view)
         bridge = kimiBridge
+        break
+      }
+      case 'qwen': {
+        const qwenBridge = new QwenBridge()
+        qwenBridge.setView(view)
+        bridge = qwenBridge
         break
       }
       // Other bridges will be added here
