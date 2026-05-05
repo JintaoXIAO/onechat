@@ -107,49 +107,6 @@ function setupIPC(): void {
     `)
     return result
   })
-
-  // Broadcast: send a message to all ready bridges
-  ipcMain.handle('broadcast-send', async (event, message: string) => {
-    const services = serviceManager.getServices()
-    const readyServices = services.filter((s) => {
-      const bridge = serviceManager.getBridge(s.id)
-      return bridge && bridge.isReady()
-    })
-
-    // Return the list of services that will receive the message
-    return readyServices.map((s) => s.id)
-  })
-
-  // Broadcast: start streaming from a specific service
-  ipcMain.handle('broadcast-stream', async (event, serviceId: string, message: string) => {
-    const bridge = serviceManager.getBridge(serviceId)
-    if (!bridge || !bridge.isReady()) {
-      return { error: `Service ${serviceId} not ready` }
-    }
-
-    const messages = [{ role: 'user' as const, content: message }]
-
-    try {
-      let fullText = ''
-      for await (const chunk of bridge.sendMessage(messages)) {
-        fullText += chunk
-        // Send chunks back to renderer as they arrive
-        if (!event.sender.isDestroyed()) {
-          event.sender.send(`broadcast-chunk-${serviceId}`, chunk)
-        }
-      }
-      if (!event.sender.isDestroyed()) {
-        event.sender.send(`broadcast-done-${serviceId}`, fullText)
-      }
-      return { success: true, text: fullText }
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : 'Unknown error'
-      if (!event.sender.isDestroyed()) {
-        event.sender.send(`broadcast-error-${serviceId}`, errMsg)
-      }
-      return { error: errMsg }
-    }
-  })
 }
 
 app.whenReady().then(async () => {
