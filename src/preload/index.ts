@@ -14,6 +14,28 @@ const api = {
     return () => {
       ipcRenderer.removeListener('service-state-changed', listener)
     }
+  },
+  // Broadcast APIs
+  broadcastSend: (message: string) => ipcRenderer.invoke('broadcast-send', message),
+  broadcastStream: (serviceId: string, message: string) =>
+    ipcRenderer.invoke('broadcast-stream', serviceId, message),
+  onBroadcastChunk: (serviceId: string, callback: (chunk: string) => void) => {
+    const channel = `broadcast-chunk-${serviceId}`
+    const listener = (_event: unknown, chunk: string) => callback(chunk)
+    ipcRenderer.on(channel, listener)
+    return () => { ipcRenderer.removeListener(channel, listener) }
+  },
+  onBroadcastDone: (serviceId: string, callback: (fullText: string) => void) => {
+    const channel = `broadcast-done-${serviceId}`
+    const listener = (_event: unknown, text: string) => callback(text)
+    ipcRenderer.on(channel, listener)
+    return () => { ipcRenderer.removeListener(channel, listener) }
+  },
+  onBroadcastError: (serviceId: string, callback: (error: string) => void) => {
+    const channel = `broadcast-error-${serviceId}`
+    const listener = (_event: unknown, err: string) => callback(err)
+    ipcRenderer.on(channel, listener)
+    return () => { ipcRenderer.removeListener(channel, listener) }
   }
 }
 

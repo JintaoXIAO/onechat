@@ -1,7 +1,6 @@
 import { ServiceState } from '../types'
 
-// Import service icons — place PNG/SVG files in src/renderer/src/assets/icons/
-// Filename should match service id: kimi.png, qwen.png, deepseek.png, chatglm.png
+// Import service icons
 import kimiIcon from '../assets/icons/kimi.png'
 import qwenIcon from '../assets/icons/qwen.png'
 import deepseekIcon from '../assets/icons/deepseek.png'
@@ -10,7 +9,9 @@ import chatglmIcon from '../assets/icons/chatglm.png'
 interface SidebarProps {
   services: ServiceState[]
   activeId: string | null
+  broadcastMode: boolean
   onServiceClick: (id: string) => void
+  onBroadcastClick: () => void
 }
 
 const SERVICE_ICONS: Record<string, string> = {
@@ -27,7 +28,7 @@ const SERVICE_FALLBACK: Record<string, string> = {
   chatglm: 'G'
 }
 
-export function Sidebar({ services, activeId, onServiceClick }: SidebarProps) {
+export function Sidebar({ services, activeId, broadcastMode, onServiceClick, onBroadcastClick }: SidebarProps) {
   const statusColor = (status: ServiceState['status']) => {
     switch (status) {
       case 'ready':
@@ -41,13 +42,14 @@ export function Sidebar({ services, activeId, onServiceClick }: SidebarProps) {
 
   return (
     <aside className="w-14 bg-gray-800 border-r border-gray-700 flex flex-col items-center py-3 gap-2">
+      {/* Service icons */}
       {services.map((service) => (
         <button
           key={service.id}
           onClick={() => onServiceClick(service.id)}
           title={service.name}
           className={`relative w-10 h-10 rounded-xl flex items-center justify-center transition-all overflow-hidden ${
-            activeId === service.id
+            activeId === service.id && !broadcastMode
               ? 'ring-2 ring-blue-500 shadow-lg shadow-blue-600/30 scale-105'
               : 'hover:bg-gray-600 hover:scale-105'
           }`}
@@ -68,6 +70,22 @@ export function Sidebar({ services, activeId, onServiceClick }: SidebarProps) {
           />
         </button>
       ))}
+
+      {/* Divider */}
+      <div className="w-6 h-px bg-gray-600 my-1" />
+
+      {/* Broadcast button */}
+      <button
+        onClick={onBroadcastClick}
+        title="Broadcast - 同时发送给所有 AI"
+        className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all ${
+          broadcastMode
+            ? 'bg-purple-600 text-white ring-2 ring-purple-400 shadow-lg shadow-purple-600/30 scale-105'
+            : 'bg-gray-700 text-gray-400 hover:bg-gray-600 hover:text-white hover:scale-105'
+        }`}
+      >
+        ⚡
+      </button>
     </aside>
   )
 }
