@@ -7,6 +7,7 @@ const api = {
   hideService: (serviceId: string) => ipcRenderer.invoke('hide-service', serviceId),
   getActiveService: () => ipcRenderer.invoke('get-active-service'),
   openServiceDevtools: (serviceId: string) => ipcRenderer.invoke('open-service-devtools', serviceId),
+  reloadService: (serviceId: string) => ipcRenderer.invoke('reload-service', serviceId),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings: unknown) => ipcRenderer.invoke('save-settings', settings),
   onServiceStateChanged: (callback: (services: unknown[]) => void) => {

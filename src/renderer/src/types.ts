@@ -21,6 +21,7 @@ declare global {
       getServices: () => Promise<ServiceState[]>
       showService: (id: string) => Promise<boolean>
       hideService: (id: string) => Promise<boolean>
+      reloadService: (id: string) => Promise<boolean>
       getActiveService: () => Promise<string | null>
       getSettings: () => Promise<AppSettings>
       saveSettings: (settings: AppSettings) => Promise<boolean>

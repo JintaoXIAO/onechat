@@ -58,6 +58,16 @@ function setupIPC(): void {
     }
     return false;
   });
+
+  // Hard refresh a service page
+  ipcMain.handle("reload-service", (_event, serviceId: string) => {
+    const view = serviceManager.getView(serviceId);
+    if (view) {
+      view.webContents.reloadIgnoringCache();
+      return true;
+    }
+    return false;
+  });
 }
 
 app.whenReady().then(() => {

@@ -25,8 +25,8 @@ function App(): React.ReactElement {
   const handleServiceClick = async (id: string) => {
     setShowSettings(false)
     if (activeId === id) {
-      await window.api.hideService(id)
-      setActiveId(null)
+      // Reload the active service page
+      await window.api.reloadService(id)
     } else {
       await window.api.showService(id)
       setActiveId(id)
