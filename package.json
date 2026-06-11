@@ -1,7 +1,7 @@
 {
   "name": "onechat",
   "version": "0.1.0",
-  "description": "AI chat aggregator - unify multiple AI services and expose them as OpenAI-compatible API",
+  "description": "AI chat aggregator - unify multiple AI services in one window",
   "main": "./out/main/index.js",
   "scripts": {
     "postinstall": "electron-vite build",
@@ -50,9 +50,7 @@
       "icon": "build/icon.png"
     }
   },
-  "dependencies": {
-    "fastify": "^5.3.3"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^4.0.0",

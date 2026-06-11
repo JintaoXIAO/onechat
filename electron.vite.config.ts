@@ -21,8 +21,7 @@ export default defineConfig({
       outDir: 'out/preload',
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'src/preload/index.ts'),
-          bridge: resolve(__dirname, 'src/preload/bridge.ts')
+          index: resolve(__dirname, 'src/preload/index.ts')
         }
       }
     }

@@ -1,8 +1,7 @@
-import { app, BrowserWindow, ipcMain, Menu } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { join } from "path";
 import { is } from "@electron-toolkit/utils";
 import { serviceManager, BUILTIN_SERVICES } from "./services";
-import { startApiServer } from "./api-server";
 
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -58,59 +57,9 @@ function setupIPC(): void {
     }
     return false;
   });
-
-  // Diagnose: inspect the DOM of a service view
-  ipcMain.handle("diagnose-service", async (_event, serviceId: string) => {
-    const view = serviceManager.getView(serviceId);
-    if (!view) return { error: "View not found" };
-
-    const result = await view.webContents.executeJavaScript(`
-      (() => {
-        const textareas = [...document.querySelectorAll('textarea')].map(el => ({
-          tag: 'textarea',
-          className: el.className.slice(0, 100),
-          placeholder: el.placeholder,
-          id: el.id
-        }));
-        const editables = [...document.querySelectorAll('[contenteditable="true"]')].map(el => ({
-          tag: el.tagName,
-          className: el.className.slice(0, 100),
-          id: el.id
-        }));
-        const buttons = [...document.querySelectorAll('button')].slice(0, 20).map(el => ({
-          tag: 'button',
-          className: el.className.slice(0, 100),
-          text: el.textContent?.trim().slice(0, 50),
-          disabled: el.disabled
-        }));
-        const editors = [...document.querySelectorAll('[class*="editor"]')].map(el => ({
-          tag: el.tagName,
-          className: el.className.slice(0, 100)
-        }));
-
-        // Find message/response containers
-        const messageContainers = [
-          ...[...document.querySelectorAll('[class*="message"]')].slice(0, 10),
-          ...[...document.querySelectorAll('[class*="segment"]')].slice(0, 5),
-          ...[...document.querySelectorAll('[class*="chat"]')].slice(0, 10),
-          ...[...document.querySelectorAll('[class*="conversation"]')].slice(0, 5),
-          ...[...document.querySelectorAll('[class*="response"]')].slice(0, 5),
-          ...[...document.querySelectorAll('[class*="answer"]')].slice(0, 5)
-        ].map(el => ({
-          tag: el.tagName,
-          className: el.className?.slice?.(0, 150) || '',
-          childCount: el.children.length,
-          textPreview: (el.innerText || '').slice(0, 80)
-        }));
-
-        return { textareas, editables, buttons, editors, messageContainers, url: location.href };
-      })()
-    `);
-    return result;
-  });
 }
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   setupIPC();
 
   const mainWindow = createWindow();
@@ -125,13 +74,6 @@ app.whenReady().then(async () => {
   mainWindow.on("resize", () => {
     serviceManager.relayout();
   });
-
-  // Start the API server
-  try {
-    await startApiServer();
-  } catch (err) {
-    console.error("Failed to start API server:", err);
-  }
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

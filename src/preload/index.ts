@@ -7,7 +7,6 @@ const api = {
   hideService: (serviceId: string) => ipcRenderer.invoke('hide-service', serviceId),
   getActiveService: () => ipcRenderer.invoke('get-active-service'),
   openServiceDevtools: (serviceId: string) => ipcRenderer.invoke('open-service-devtools', serviceId),
-  diagnoseService: (serviceId: string) => ipcRenderer.invoke('diagnose-service', serviceId),
   onServiceStateChanged: (callback: (services: unknown[]) => void) => {
     const listener = (_event: unknown, services: unknown[]) => callback(services)
     ipcRenderer.on('service-state-changed', listener)

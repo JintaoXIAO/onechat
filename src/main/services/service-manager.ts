@@ -1,17 +1,10 @@
 import { BrowserWindow, WebContentsView, session } from 'electron'
-import { join } from 'path'
 import { ServiceConfig, ServiceState } from './types'
-import { Bridge } from '../bridges'
-import { KimiBridge } from '../bridges/kimi-bridge'
-import { QwenBridge } from '../bridges/qwen-bridge'
-import { DeepSeekBridge } from '../bridges/deepseek-bridge'
-import { ChatGLMBridge } from '../bridges/chatglm-bridge'
 
 export class ServiceManager {
   private views: Map<string, WebContentsView> = new Map()
   private configs: Map<string, ServiceConfig> = new Map()
   private states: Map<string, ServiceState> = new Map()
-  private bridges: Map<string, Bridge> = new Map()
   private mainWindow: BrowserWindow | null = null
   private activeServiceId: string | null = null
 
@@ -30,9 +23,8 @@ export class ServiceManager {
     const view = new WebContentsView({
       webPreferences: {
         session: ses,
-        preload: join(__dirname, '../preload/bridge.js'),
         sandbox: false,
-        contextIsolation: false,
+        contextIsolation: true,
         nodeIntegration: false
       }
     })
@@ -51,8 +43,6 @@ export class ServiceManager {
 
     view.webContents.on('did-finish-load', () => {
       this.updateState(config.id, { status: 'ready' })
-      // Initialize bridge after page loads
-      this.initializeBridge(config.id, view)
     })
 
     view.webContents.on('did-fail-load', () => {
@@ -123,59 +113,12 @@ export class ServiceManager {
     return this.views.get(id)
   }
 
-  getBridge(id: string): Bridge | undefined {
-    return this.bridges.get(id)
-  }
-
   /** Reposition the service view when window resizes */
   relayout(): void {
     if (!this.activeServiceId) return
     const view = this.views.get(this.activeServiceId)
     if (view) {
       this.layoutServiceView(view)
-    }
-  }
-
-  private async initializeBridge(serviceId: string, view: WebContentsView): Promise<void> {
-    let bridge: Bridge | undefined
-
-    switch (serviceId) {
-      case 'kimi': {
-        const kimiBridge = new KimiBridge()
-        kimiBridge.setView(view)
-        bridge = kimiBridge
-        break
-      }
-      case 'qwen': {
-        const qwenBridge = new QwenBridge()
-        qwenBridge.setView(view)
-        bridge = qwenBridge
-        break
-      }
-      case 'deepseek': {
-        const deepseekBridge = new DeepSeekBridge()
-        deepseekBridge.setView(view)
-        bridge = deepseekBridge
-        break
-      }
-      case 'chatglm': {
-        const chatglmBridge = new ChatGLMBridge()
-        chatglmBridge.setView(view)
-        bridge = chatglmBridge
-        break
-      }
-    }
-
-    if (bridge) {
-      try {
-        await bridge.initialize()
-        this.bridges.set(serviceId, bridge)
-        console.log(`[Bridge] ${serviceId} initialized successfully`)
-      } catch (err) {
-        console.error(`[Bridge] Failed to initialize ${serviceId}:`, err)
-      }
-    } else {
-      console.log(`[Bridge] No bridge implementation for ${serviceId}`)
     }
   }
 
