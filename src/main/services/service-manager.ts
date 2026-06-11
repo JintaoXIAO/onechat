@@ -1,4 +1,4 @@
-import { BrowserWindow, WebContentsView, session } from 'electron'
+import { BrowserWindow, WebContentsView, session, shell } from 'electron'
 import { ServiceConfig, ServiceState } from './types'
 import { getSettings } from '../settings'
 
@@ -44,6 +44,18 @@ export class ServiceManager {
 
     // Load the service URL
     view.webContents.loadURL(config.url)
+
+    // Handle popup windows (e.g. Google OAuth login)
+    view.webContents.setWindowOpenHandler(({ url }) => {
+      // Open OAuth/login popups in a new window sharing the same session
+      if (this.isAuthUrl(url)) {
+        this.openAuthWindow(url, ses)
+        return { action: 'deny' }
+      }
+      // Open other external links in the system browser
+      shell.openExternal(url)
+      return { action: 'deny' }
+    })
 
     view.webContents.on('did-finish-load', () => {
       this.updateState(config.id, { status: 'ready' })
@@ -155,6 +167,43 @@ export class ServiceManager {
       y: 0,
       width: bounds.width - sidebarWidth,
       height: bounds.height
+    })
+  }
+
+  private isAuthUrl(url: string): boolean {
+    const authDomains = [
+      'accounts.google.com',
+      'appleid.apple.com',
+      'login.microsoftonline.com',
+      'github.com/login',
+      'auth0.com'
+    ]
+    return authDomains.some((domain) => url.includes(domain))
+  }
+
+  private openAuthWindow(url: string, ses: Electron.Session): void {
+    const authWindow = new BrowserWindow({
+      width: 500,
+      height: 700,
+      parent: this.mainWindow ?? undefined,
+      modal: false,
+      webPreferences: {
+        session: ses,
+        nodeIntegration: false,
+        contextIsolation: true
+      }
+    })
+
+    authWindow.loadURL(url)
+
+    // Close auth window when navigation returns to the service
+    authWindow.webContents.on('will-redirect', (_event, redirectUrl) => {
+      if (!this.isAuthUrl(redirectUrl) && !redirectUrl.includes('accounts.google.com')) {
+        // Auth flow completed, close after a short delay to let cookies settle
+        setTimeout(() => {
+          if (!authWindow.isDestroyed()) authWindow.close()
+        }, 1000)
+      }
     })
   }
 
