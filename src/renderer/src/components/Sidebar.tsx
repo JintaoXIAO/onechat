@@ -6,6 +6,7 @@ import kimiIcon from '../assets/icons/kimi.png'
 import qwenIcon from '../assets/icons/qwen.png'
 import deepseekIcon from '../assets/icons/deepseek.png'
 import chatglmIcon from '../assets/icons/chatglm.png'
+import chatgptIcon from '../assets/icons/chatgpt.svg'
 
 interface SidebarProps {
   services: ServiceState[]
@@ -19,14 +20,16 @@ const SERVICE_ICONS: Record<string, string> = {
   kimi: kimiIcon,
   qwen: qwenIcon,
   deepseek: deepseekIcon,
-  chatglm: chatglmIcon
+  chatglm: chatglmIcon,
+  chatgpt: chatgptIcon
 }
 
 const SERVICE_FALLBACK: Record<string, string> = {
   kimi: 'K',
   qwen: 'Q',
   deepseek: 'D',
-  chatglm: 'G'
+  chatglm: 'G',
+  chatgpt: 'C'
 }
 
 export function Sidebar({ services, activeId, onServiceClick, onSettingsClick, settingsActive }: SidebarProps) {
