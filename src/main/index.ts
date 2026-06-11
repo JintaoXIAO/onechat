@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import { join } from "path";
 import { is } from "@electron-toolkit/utils";
 import { serviceManager, BUILTIN_SERVICES } from "./services";
+import { setupSettingsIPC } from "./settings";
 
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
@@ -61,6 +62,7 @@ function setupIPC(): void {
 
 app.whenReady().then(() => {
   setupIPC();
+  setupSettingsIPC();
 
   const mainWindow = createWindow();
   serviceManager.setMainWindow(mainWindow);

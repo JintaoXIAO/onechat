@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { WelcomeScreen } from './components/WelcomeScreen'
+import { SettingsPage } from './components/SettingsPage'
 import { ServiceState } from './types'
 
 function App(): React.ReactElement {
   const [services, setServices] = useState<ServiceState[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
 
   useEffect(() => {
-    // Load initial services
     window.api.getServices().then(setServices)
     window.api.getActiveService().then(setActiveId)
 
-    // Listen for state changes from main process
     const unsubscribe = window.api.onServiceStateChanged((updated) => {
       setServices(updated as ServiceState[])
       const active = (updated as ServiceState[]).find((s) => s.visible)
@@ -23,6 +23,7 @@ function App(): React.ReactElement {
   }, [])
 
   const handleServiceClick = async (id: string) => {
+    setShowSettings(false)
     if (activeId === id) {
       await window.api.hideService(id)
       setActiveId(null)
@@ -32,16 +33,26 @@ function App(): React.ReactElement {
     }
   }
 
+  const handleSettingsClick = () => {
+    // Hide active service view when opening settings
+    if (activeId) {
+      window.api.hideService(activeId)
+      setActiveId(null)
+    }
+    setShowSettings(true)
+  }
+
   return (
     <div className="flex h-screen bg-gray-900 text-white">
       <Sidebar
         services={services}
         activeId={activeId}
         onServiceClick={handleServiceClick}
+        onSettingsClick={handleSettingsClick}
+        settingsActive={showSettings}
       />
-      {/* When a service is active, its WebContentsView is rendered by Electron
-          directly on top of this area, so we only show WelcomeScreen when nothing is active */}
-      {!activeId && <WelcomeScreen />}
+      {showSettings && <SettingsPage services={services} />}
+      {!showSettings && !activeId && <WelcomeScreen />}
     </div>
   )
 }

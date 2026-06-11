@@ -1,10 +1,12 @@
 import { BrowserWindow, WebContentsView, session } from 'electron'
 import { ServiceConfig, ServiceState } from './types'
+import { getSettings } from '../settings'
 
 export class ServiceManager {
   private views: Map<string, WebContentsView> = new Map()
   private configs: Map<string, ServiceConfig> = new Map()
   private states: Map<string, ServiceState> = new Map()
+  private sessions: Map<string, Electron.Session> = new Map()
   private mainWindow: BrowserWindow | null = null
   private activeServiceId: string | null = null
 
@@ -19,6 +21,8 @@ export class ServiceManager {
     // Use a persistent session partition per service to isolate cookies
     const partition = `persist:service-${config.id}`
     const ses = session.fromPartition(partition)
+    this.sessions.set(config.id, ses)
+    this.applyProxy(config.id)
 
     const view = new WebContentsView({
       webPreferences: {
@@ -119,6 +123,25 @@ export class ServiceManager {
     const view = this.views.get(this.activeServiceId)
     if (view) {
       this.layoutServiceView(view)
+    }
+  }
+
+  applyProxy(serviceId: string): void {
+    const ses = this.sessions.get(serviceId)
+    if (!ses) return
+    const settings = getSettings()
+    const enabled = settings.proxy.enabledServices[serviceId] ?? false
+    const proxyUrl = settings.proxy.proxyUrl
+    if (enabled && proxyUrl) {
+      ses.setProxy({ proxyRules: proxyUrl })
+    } else {
+      ses.setProxy({ proxyRules: '' })
+    }
+  }
+
+  applyAllProxies(): void {
+    for (const id of this.sessions.keys()) {
+      this.applyProxy(id)
     }
   }
 
