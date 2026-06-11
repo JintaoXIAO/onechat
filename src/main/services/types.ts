@@ -44,5 +44,10 @@ export const BUILTIN_SERVICES: ServiceConfig[] = [
     id: 'claude',
     name: 'Claude',
     url: 'https://claude.ai'
+  },
+  {
+    id: 'grok',
+    name: 'Grok',
+    url: 'https://grok.com'
   }
 ]

@@ -8,6 +8,7 @@ import deepseekIcon from '../assets/icons/deepseek.png'
 import chatglmIcon from '../assets/icons/chatglm.png'
 import chatgptIcon from '../assets/icons/chatgpt.svg'
 import claudeIcon from '../assets/icons/claude.svg'
+import grokIcon from '../assets/icons/grok.svg'
 
 interface SidebarProps {
   services: ServiceState[]
@@ -23,7 +24,8 @@ const SERVICE_ICONS: Record<string, string> = {
   deepseek: deepseekIcon,
   chatglm: chatglmIcon,
   chatgpt: chatgptIcon,
-  claude: claudeIcon
+  claude: claudeIcon,
+  grok: grokIcon
 }
 
 const SERVICE_FALLBACK: Record<string, string> = {
@@ -32,7 +34,8 @@ const SERVICE_FALLBACK: Record<string, string> = {
   deepseek: 'D',
   chatglm: 'G',
   chatgpt: 'C',
-  claude: 'Cl'
+  claude: 'Cl',
+  grok: 'Gr'
 }
 
 export function Sidebar({ services, activeId, onServiceClick, onSettingsClick, settingsActive }: SidebarProps) {
