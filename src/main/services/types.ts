@@ -49,5 +49,10 @@ export const BUILTIN_SERVICES: ServiceConfig[] = [
     id: 'grok',
     name: 'Grok',
     url: 'https://grok.com'
+  },
+  {
+    id: 'iciba',
+    name: '金山词霸',
+    url: 'https://www.iciba.com/'
   }
 ]
