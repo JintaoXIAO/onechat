@@ -2,11 +2,15 @@ import { BrowserWindow, WebContentsView, session, shell } from 'electron'
 import { ServiceConfig, ServiceState } from './types'
 import { getSettings } from '../settings'
 
+/** Time in ms before an inactive service view gets destroyed (10 minutes) */
+const SLEEP_TIMEOUT_MS = 10 * 60 * 1000
+
 export class ServiceManager {
   private views: Map<string, WebContentsView> = new Map()
   private configs: Map<string, ServiceConfig> = new Map()
   private states: Map<string, ServiceState> = new Map()
   private sessions: Map<string, Electron.Session> = new Map()
+  private sleepTimers: Map<string, NodeJS.Timeout> = new Map()
   private mainWindow: BrowserWindow | null = null
   private activeServiceId: string | null = null
 
@@ -14,82 +18,34 @@ export class ServiceManager {
     this.mainWindow = window
   }
 
+  /** Register a service config (lazy — does NOT create a view yet) */
   addService(config: ServiceConfig): void {
-    if (this.views.has(config.id)) return
+    if (this.configs.has(config.id)) return
     this.configs.set(config.id, config)
 
-    // Use a persistent session partition per service to isolate cookies
-    const partition = `persist:service-${config.id}`
-    const ses = session.fromPartition(partition)
-    this.sessions.set(config.id, ses)
-    this.applyProxy(config.id)
-
-    const view = new WebContentsView({
-      webPreferences: {
-        session: ses,
-        sandbox: false,
-        contextIsolation: true,
-        nodeIntegration: false
-      }
-    })
-
-    // Set initial state
+    // Set initial idle state
     this.states.set(config.id, {
       id: config.id,
       name: config.name,
       url: config.url,
-      status: 'loading',
+      status: 'idle',
       visible: false
     })
 
-    // Load the service URL
-    if (config.userAgent) {
-      view.webContents.setUserAgent(config.userAgent)
-    }
-    view.webContents.loadURL(config.url)
-
-    // Handle popup windows (e.g. Google OAuth login)
-    view.webContents.setWindowOpenHandler(({ url }) => {
-      // Open OAuth/login popups in a new window sharing the same session
-      if (this.isAuthUrl(url)) {
-        this.openAuthWindow(url, ses)
-        return { action: 'deny' }
-      }
-      // Open other external links in the system browser
-      shell.openExternal(url)
-      return { action: 'deny' }
-    })
-
-    view.webContents.on('did-finish-load', () => {
-      this.updateState(config.id, { status: 'ready' })
-      // Apply zoom factor after page loads
-      if (config.zoomFactor && config.zoomFactor !== 1.0) {
-        view.webContents.setZoomFactor(config.zoomFactor)
-      }
-    })
-
-    view.webContents.on('did-fail-load', () => {
-      this.updateState(config.id, { status: 'error' })
-    })
-
-    this.views.set(config.id, view)
+    this.notifyRenderer()
   }
 
   removeService(id: string): void {
-    const view = this.views.get(id)
-    if (!view) return
-
-    if (this.mainWindow) {
-      this.mainWindow.contentView.removeChildView(view)
-    }
-    view.webContents.close()
-    this.views.delete(id)
+    this.cancelSleepTimer(id)
+    this.destroyView(id)
     this.configs.delete(id)
     this.states.delete(id)
+    this.sessions.delete(id)
 
     if (this.activeServiceId === id) {
       this.activeServiceId = null
     }
+    this.notifyRenderer()
   }
 
   showService(id: string): void {
@@ -100,10 +56,18 @@ export class ServiceManager {
       this.hideService(this.activeServiceId)
     }
 
-    const view = this.views.get(id)
-    if (!view) return
+    // Cancel sleep timer if pending
+    this.cancelSleepTimer(id)
 
-    // Add view to window and position it
+    // If view doesn't exist, create it (lazy activation)
+    if (!this.views.has(id)) {
+      this.activateService(id)
+      // activateService handles adding to window after load
+      this.activeServiceId = id
+      return
+    }
+
+    const view = this.views.get(id)!
     this.mainWindow.contentView.addChildView(view)
     this.layoutServiceView(view)
     this.activeServiceId = id
@@ -114,14 +78,17 @@ export class ServiceManager {
     if (!this.mainWindow) return
 
     const view = this.views.get(id)
-    if (!view) return
-
-    this.mainWindow.contentView.removeChildView(view)
+    if (view) {
+      this.mainWindow.contentView.removeChildView(view)
+    }
     this.updateState(id, { visible: false })
 
     if (this.activeServiceId === id) {
       this.activeServiceId = null
     }
+
+    // Start sleep timer
+    this.startSleepTimer(id)
   }
 
   getServices(): ServiceState[] {
@@ -164,10 +131,107 @@ export class ServiceManager {
     }
   }
 
+  // --- Private methods ---
+
+  /** Create the view and load the page (lazy activation) */
+  private activateService(id: string): void {
+    const config = this.configs.get(id)
+    if (!config || !this.mainWindow) return
+
+    // Create or retrieve persistent session
+    let ses = this.sessions.get(id)
+    if (!ses) {
+      const partition = `persist:service-${id}`
+      ses = session.fromPartition(partition)
+      this.sessions.set(id, ses)
+      this.applyProxy(id)
+    }
+
+    const view = new WebContentsView({
+      webPreferences: {
+        session: ses,
+        sandbox: false,
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    })
+
+    this.updateState(id, { status: 'loading', visible: true })
+
+    // Set user agent if configured
+    if (config.userAgent) {
+      view.webContents.setUserAgent(config.userAgent)
+    }
+
+    view.webContents.loadURL(config.url)
+
+    // Handle popup windows (e.g. Google OAuth login)
+    view.webContents.setWindowOpenHandler(({ url }) => {
+      if (this.isAuthUrl(url)) {
+        this.openAuthWindow(url, ses!)
+        return { action: 'deny' }
+      }
+      shell.openExternal(url)
+      return { action: 'deny' }
+    })
+
+    view.webContents.on('did-finish-load', () => {
+      this.updateState(id, { status: 'ready' })
+      if (config.zoomFactor && config.zoomFactor !== 1.0) {
+        view.webContents.setZoomFactor(config.zoomFactor)
+      }
+    })
+
+    view.webContents.on('did-fail-load', () => {
+      this.updateState(id, { status: 'error' })
+    })
+
+    this.views.set(id, view)
+
+    // Add to window immediately and position
+    this.mainWindow.contentView.addChildView(view)
+    this.layoutServiceView(view)
+  }
+
+  /** Destroy a view and release memory */
+  private destroyView(id: string): void {
+    const view = this.views.get(id)
+    if (!view) return
+
+    if (this.mainWindow) {
+      this.mainWindow.contentView.removeChildView(view)
+    }
+    view.webContents.close()
+    this.views.delete(id)
+  }
+
+  /** Start a timer to put a service to sleep after SLEEP_TIMEOUT_MS */
+  private startSleepTimer(id: string): void {
+    this.cancelSleepTimer(id)
+    const timer = setTimeout(() => {
+      this.sleepTimers.delete(id)
+      // Only sleep if still not active
+      if (this.activeServiceId !== id) {
+        this.destroyView(id)
+        this.updateState(id, { status: 'idle' })
+        console.log(`[Sleep] ${id} view destroyed after inactivity`)
+      }
+    }, SLEEP_TIMEOUT_MS)
+    this.sleepTimers.set(id, timer)
+  }
+
+  /** Cancel a pending sleep timer */
+  private cancelSleepTimer(id: string): void {
+    const timer = this.sleepTimers.get(id)
+    if (timer) {
+      clearTimeout(timer)
+      this.sleepTimers.delete(id)
+    }
+  }
+
   private layoutServiceView(view: WebContentsView): void {
     if (!this.mainWindow) return
     const bounds = this.mainWindow.getContentBounds()
-    // Leave space for the narrow icon sidebar (56px = w-14 in Tailwind)
     const sidebarWidth = 56
     view.setBounds({
       x: sidebarWidth,
@@ -203,10 +267,8 @@ export class ServiceManager {
 
     authWindow.loadURL(url)
 
-    // Close auth window when navigation returns to the service
     authWindow.webContents.on('will-redirect', (_event, redirectUrl) => {
       if (!this.isAuthUrl(redirectUrl) && !redirectUrl.includes('accounts.google.com')) {
-        // Auth flow completed, close after a short delay to let cookies settle
         setTimeout(() => {
           if (!authWindow.isDestroyed()) authWindow.close()
         }, 1000)
@@ -218,10 +280,13 @@ export class ServiceManager {
     const state = this.states.get(id)
     if (state) {
       Object.assign(state, partial)
-      // Notify renderer about state change
-      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-        this.mainWindow.webContents.send('service-state-changed', this.getServices())
-      }
+      this.notifyRenderer()
+    }
+  }
+
+  private notifyRenderer(): void {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      this.mainWindow.webContents.send('service-state-changed', this.getServices())
     }
   }
 }

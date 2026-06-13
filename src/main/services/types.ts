@@ -13,7 +13,7 @@ export interface ServiceState {
   id: string
   name: string
   url: string
-  status: 'loading' | 'ready' | 'error'
+  status: 'idle' | 'loading' | 'ready' | 'error'
   visible: boolean
 }
 

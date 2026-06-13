@@ -50,6 +50,8 @@ export function Sidebar({ services, activeId, onServiceClick, onSettingsClick, s
         return 'bg-yellow-400 animate-pulse'
       case 'error':
         return 'bg-red-400'
+      case 'idle':
+        return 'bg-gray-500'
     }
   }
 
