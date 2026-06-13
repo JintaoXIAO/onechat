@@ -32,8 +32,7 @@
           "target": "nsis",
           "arch": ["x64"]
         }
-      ],
-      "icon": "build/icon.ico"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -42,12 +41,11 @@
       "shortcutName": "OneChat"
     },
     "mac": {
-      "target": ["dmg", "zip"],
-      "icon": "build/icon.icns"
+      "target": ["dmg", "zip"]
     },
     "linux": {
       "target": ["AppImage", "deb"],
-      "icon": "build/icon.png"
+      "category": "Utility"
     }
   },
   "dependencies": {},
