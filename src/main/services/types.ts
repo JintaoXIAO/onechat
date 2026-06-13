@@ -3,6 +3,10 @@ export interface ServiceConfig {
   name: string
   url: string
   icon?: string
+  /** Page zoom factor, default 1.0 */
+  zoomFactor?: number
+  /** Custom user agent (e.g. to request mobile layout) */
+  userAgent?: string
 }
 
 export interface ServiceState {
@@ -53,6 +57,8 @@ export const BUILTIN_SERVICES: ServiceConfig[] = [
   {
     id: 'iciba',
     name: '金山词霸',
-    url: 'https://www.iciba.com/'
+    url: 'https://www.iciba.com/',
+    zoomFactor: 0.85,
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36'
   }
 ]

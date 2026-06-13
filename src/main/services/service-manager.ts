@@ -43,6 +43,9 @@ export class ServiceManager {
     })
 
     // Load the service URL
+    if (config.userAgent) {
+      view.webContents.setUserAgent(config.userAgent)
+    }
     view.webContents.loadURL(config.url)
 
     // Handle popup windows (e.g. Google OAuth login)
@@ -59,6 +62,10 @@ export class ServiceManager {
 
     view.webContents.on('did-finish-load', () => {
       this.updateState(config.id, { status: 'ready' })
+      // Apply zoom factor after page loads
+      if (config.zoomFactor && config.zoomFactor !== 1.0) {
+        view.webContents.setZoomFactor(config.zoomFactor)
+      }
     })
 
     view.webContents.on('did-fail-load', () => {
