@@ -2,6 +2,10 @@
   "name": "onechat",
   "version": "0.1.0",
   "description": "AI chat aggregator - unify multiple AI services in one window",
+  "author": {
+    "name": "JintaoXIAO",
+    "email": "xiaojintao@outlook.com"
+  },
   "main": "./out/main/index.js",
   "scripts": {
     "postinstall": "electron-vite build",
