@@ -116,12 +116,12 @@ export class ServiceManager {
     const ses = this.sessions.get(serviceId)
     if (!ses) return
     const settings = getSettings()
-    const enabled = settings.proxy.enabledServices[serviceId] ?? false
-    const proxyUrl = settings.proxy.proxyUrl
+    const enabled = settings.proxy?.enabledServices?.[serviceId] ?? false
+    const proxyUrl = settings.proxy?.proxyUrl
     if (enabled && proxyUrl) {
-      ses.setProxy({ proxyRules: proxyUrl })
+      ses.setProxy({ proxyRules: proxyUrl }).catch(() => {})
     } else {
-      ses.setProxy({ proxyRules: '' })
+      ses.setProxy({ proxyRules: '' }).catch(() => {})
     }
   }
 
@@ -163,7 +163,9 @@ export class ServiceManager {
       view.webContents.setUserAgent(config.userAgent)
     }
 
-    view.webContents.loadURL(config.url)
+    view.webContents.loadURL(config.url).catch(() => {
+      // Handled by did-fail-load event
+    })
 
     // Handle popup windows (e.g. Google OAuth login)
     view.webContents.setWindowOpenHandler(({ url }) => {
@@ -267,12 +269,18 @@ export class ServiceManager {
 
     authWindow.loadURL(url)
 
-    authWindow.webContents.on('will-redirect', (_event, redirectUrl) => {
+    authWindow.webContents.on('will-redirect', (details) => {
+      const redirectUrl = details.url
       if (!this.isAuthUrl(redirectUrl) && !redirectUrl.includes('accounts.google.com')) {
         setTimeout(() => {
           if (!authWindow.isDestroyed()) authWindow.close()
         }, 1000)
       }
+    })
+
+    // Clean up auth window reference when user closes it manually
+    authWindow.on('closed', () => {
+      // Window is already destroyed, nothing to clean up
     })
   }
 

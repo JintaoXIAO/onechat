@@ -84,12 +84,18 @@ app.whenReady().then(() => {
 
   // Handle window resize to reposition service views
   mainWindow.on("resize", () => {
+    if (mainWindow.isDestroyed()) return;
     serviceManager.relayout();
   });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      const newWindow = createWindow();
+      serviceManager.setMainWindow(newWindow);
+      newWindow.on("resize", () => {
+        if (newWindow.isDestroyed()) return;
+        serviceManager.relayout();
+      });
     }
   });
 });

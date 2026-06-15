@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AppSettings, ServiceState } from '../types'
 
 interface SettingsPageProps {
@@ -11,6 +11,13 @@ export function SettingsPage({ services }: SettingsPageProps) {
   })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     window.api.getSettings().then(setSettings)
@@ -43,7 +50,8 @@ export function SettingsPage({ services }: SettingsPageProps) {
     await window.api.saveSettings(settings)
     setSaving(false)
     setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current)
+    savedTimerRef.current = setTimeout(() => setSaved(false), 2000)
   }
 
   return (

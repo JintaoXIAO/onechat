@@ -25,7 +25,13 @@ export function getSettings(): AppSettings {
   if (!existsSync(filePath)) return DEFAULT_SETTINGS
   try {
     const raw = readFileSync(filePath, 'utf-8')
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) }
+    const parsed = JSON.parse(raw)
+    return {
+      proxy: {
+        ...DEFAULT_SETTINGS.proxy,
+        ...parsed.proxy
+      }
+    }
   } catch {
     return DEFAULT_SETTINGS
   }
