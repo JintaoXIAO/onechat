@@ -5,6 +5,9 @@ import { getSettings } from '../settings'
 /** Time in ms before an inactive service view gets destroyed (10 minutes) */
 const SLEEP_TIMEOUT_MS = 10 * 60 * 1000
 
+/** Must match renderer Sidebar width: Tailwind `w-14` = 56px (3.5rem) */
+const SIDEBAR_WIDTH_PX = 56
+
 export class ServiceManager {
   private views: Map<string, WebContentsView> = new Map()
   private configs: Map<string, ServiceConfig> = new Map()
@@ -16,6 +19,15 @@ export class ServiceManager {
 
   setMainWindow(window: BrowserWindow): void {
     this.mainWindow = window
+
+    // Cancel all sleep timers when window is closed to prevent
+    // callbacks operating on destroyed objects
+    window.on('closed', () => {
+      for (const [id] of this.sleepTimers) {
+        this.cancelSleepTimer(id)
+      }
+      this.mainWindow = null
+    })
   }
 
   /** Register a service config (lazy — does NOT create a view yet) */
@@ -48,8 +60,19 @@ export class ServiceManager {
     this.notifyRenderer()
   }
 
+  /** Destroy all views and cancel timers (called on app quit) */
+  destroyAll(): void {
+    for (const [id] of this.sleepTimers) {
+      this.cancelSleepTimer(id)
+    }
+    for (const id of this.views.keys()) {
+      this.destroyView(id)
+    }
+    this.activeServiceId = null
+  }
+
   showService(id: string): void {
-    if (!this.mainWindow) return
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
     // Hide current active service
     if (this.activeServiceId && this.activeServiceId !== id) {
@@ -68,6 +91,15 @@ export class ServiceManager {
     }
 
     const view = this.views.get(id)!
+
+    // View's webContents may have been destroyed while minimized
+    if (view.webContents.isDestroyed()) {
+      this.views.delete(id)
+      this.activateService(id)
+      this.activeServiceId = id
+      return
+    }
+
     this.mainWindow.contentView.addChildView(view)
     this.layoutServiceView(view)
     this.activeServiceId = id
@@ -75,11 +107,15 @@ export class ServiceManager {
   }
 
   hideService(id: string): void {
-    if (!this.mainWindow) return
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
 
     const view = this.views.get(id)
-    if (view) {
-      this.mainWindow.contentView.removeChildView(view)
+    if (view && !view.webContents.isDestroyed()) {
+      try {
+        this.mainWindow.contentView.removeChildView(view)
+      } catch {
+        // View may already be detached
+      }
     }
     this.updateState(id, { visible: false })
 
@@ -105,9 +141,9 @@ export class ServiceManager {
 
   /** Reposition the service view when window resizes */
   relayout(): void {
-    if (!this.activeServiceId) return
+    if (!this.activeServiceId || !this.mainWindow || this.mainWindow.isDestroyed()) return
     const view = this.views.get(this.activeServiceId)
-    if (view) {
+    if (view && !view.webContents.isDestroyed()) {
       this.layoutServiceView(view)
     }
   }
@@ -152,7 +188,8 @@ export class ServiceManager {
         session: ses,
         sandbox: false,
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        backgroundThrottling: false
       }
     })
 
@@ -200,20 +237,30 @@ export class ServiceManager {
     const view = this.views.get(id)
     if (!view) return
 
-    if (this.mainWindow) {
-      this.mainWindow.contentView.removeChildView(view)
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      try {
+        this.mainWindow.contentView.removeChildView(view)
+      } catch {
+        // View may already be detached
+      }
     }
-    view.webContents.close()
+
+    if (!view.webContents.isDestroyed()) {
+      view.webContents.close()
+    }
     this.views.delete(id)
   }
 
   /** Start a timer to put a service to sleep after SLEEP_TIMEOUT_MS */
   private startSleepTimer(id: string): void {
+    // Never schedule sleep for the currently active (foreground) service
+    if (this.activeServiceId === id) return
+
     this.cancelSleepTimer(id)
     const timer = setTimeout(() => {
       this.sleepTimers.delete(id)
-      // Only sleep if still not active
-      if (this.activeServiceId !== id) {
+      // Only sleep if still not active and view still exists
+      if (this.activeServiceId !== id && this.views.has(id)) {
         this.destroyView(id)
         this.updateState(id, { status: 'idle' })
         console.log(`[Sleep] ${id} view destroyed after inactivity`)
@@ -232,13 +279,13 @@ export class ServiceManager {
   }
 
   private layoutServiceView(view: WebContentsView): void {
-    if (!this.mainWindow) return
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return
+    if (view.webContents.isDestroyed()) return
     const bounds = this.mainWindow.getContentBounds()
-    const sidebarWidth = 56
     view.setBounds({
-      x: sidebarWidth,
+      x: SIDEBAR_WIDTH_PX,
       y: 0,
-      width: bounds.width - sidebarWidth,
+      width: bounds.width - SIDEBAR_WIDTH_PX,
       height: bounds.height
     })
   }
@@ -255,10 +302,11 @@ export class ServiceManager {
   }
 
   private openAuthWindow(url: string, ses: Electron.Session): void {
+    const parent = this.mainWindow && !this.mainWindow.isDestroyed() ? this.mainWindow : undefined
     const authWindow = new BrowserWindow({
       width: 500,
       height: 700,
-      parent: this.mainWindow ?? undefined,
+      parent,
       modal: false,
       webPreferences: {
         session: ses,

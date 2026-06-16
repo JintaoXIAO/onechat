@@ -4,6 +4,14 @@ import { is } from "@electron-toolkit/utils";
 import { serviceManager, BUILTIN_SERVICES } from "./services";
 import { setupSettingsIPC } from "./settings";
 
+// Global error handlers to prevent crash dialogs on macOS
+process.on("uncaughtException", (error) => {
+  console.error("[Uncaught Exception]", error);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[Unhandled Rejection]", reason);
+});
+
 function createWindow(): BrowserWindow {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -52,7 +60,7 @@ function setupIPC(): void {
   // Open DevTools for a specific service view (for debugging)
   ipcMain.handle("open-service-devtools", (_event, serviceId: string) => {
     const view = serviceManager.getView(serviceId);
-    if (view) {
+    if (view && !view.webContents.isDestroyed()) {
       view.webContents.openDevTools({ mode: "detach" });
       return true;
     }
@@ -62,7 +70,7 @@ function setupIPC(): void {
   // Hard refresh a service page
   ipcMain.handle("reload-service", (_event, serviceId: string) => {
     const view = serviceManager.getView(serviceId);
-    if (view) {
+    if (view && !view.webContents.isDestroyed()) {
       view.webContents.reloadIgnoringCache();
       return true;
     }
@@ -104,4 +112,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", () => {
+  serviceManager.destroyAll();
 });

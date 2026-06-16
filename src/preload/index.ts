@@ -11,6 +11,8 @@ const api = {
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings: unknown) => ipcRenderer.invoke('save-settings', settings),
   onServiceStateChanged: (callback: (services: unknown[]) => void) => {
+    // Remove all previous listeners to prevent stacking on HMR/reload
+    ipcRenderer.removeAllListeners('service-state-changed')
     const listener = (_event: unknown, services: unknown[]) => callback(services)
     ipcRenderer.on('service-state-changed', listener)
     return () => {

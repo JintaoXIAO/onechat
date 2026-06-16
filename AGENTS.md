@@ -2,15 +2,14 @@
 
 ## What is this
 
-AI chat aggregator built on Electron. Loads AI web services (Kimi, Qwen, DeepSeek, ChatGLM) in BrowserViews, injects bridge scripts to control them, and exposes a local OpenAI-compatible HTTP API so other tools can use these services programmatically.
+AI chat aggregator built on Electron. Loads AI web services (Kimi, Qwen, DeepSeek, ChatGLM, ChatGPT, Claude, Grok, etc.) in WebContentsViews, providing a unified window with per-service session isolation and lazy loading.
 
 ## Tech stack
 
-- **Runtime**: Electron (main + renderer + preload)
+- **Runtime**: Electron 35 (main + renderer + preload)
 - **Build**: electron-vite 3.x (Vite 6 under the hood)
 - **Package manager**: Bun (via scoop, no Node.js installed separately — Electron ships its own Node)
 - **UI**: React 19 + Tailwind CSS 4 (using `@tailwindcss/vite` plugin, CSS-first config via `@import "tailwindcss"`)
-- **API server**: Fastify (runs inside Electron main process)
 - **Language**: TypeScript (strict mode)
 
 ## Project layout
@@ -18,10 +17,9 @@ AI chat aggregator built on Electron. Loads AI web services (Kimi, Qwen, DeepSee
 ```
 src/
   main/           # Electron main process (entry: index.ts)
-    api-server/   # Fastify local HTTP server (OpenAI-compatible endpoints)
-    bridges/      # Per-service bridge implementations
     services/     # ServiceManager + service config/state types
-  preload/        # Preload scripts (index.ts for UI, bridge.ts for AI webviews)
+    settings/     # App settings (proxy config) with JSON persistence
+  preload/        # Preload script (index.ts — exposes IPC API to renderer)
   renderer/       # React UI (entry: src/main.tsx, root: index.html)
 out/              # Build output (gitignored)
 ```
@@ -40,10 +38,10 @@ All commands use `bun run`. Do NOT use `npm` or `npx` — Node.js is not install
 ## Architecture notes
 
 1. **Three processes**: main (Node/Electron), preload (bridge between), renderer (React UI).
-2. **BrowserViews**: Each AI service runs in a hidden `BrowserView` with a service-specific preload script injected. The bridge communicates via Electron IPC.
-3. **Bridge pattern**: Each AI service gets a bridge class (`src/main/bridges/`) implementing a common interface: `sendMessage(text) → AsyncIterable<string>`. Two strategies: DOM manipulation or network interception.
-4. **API Server**: Fastify on `localhost:11434` (Ollama-style port), exposes `/v1/chat/completions` and `/v1/models`. Runs in the main process.
-5. **IPC flow**: API Server → ServiceManager → Bridge → BrowserView (preload script) → AI webpage DOM/network.
+2. **WebContentsView**: Each AI service runs in a `WebContentsView` attached to the main window's `contentView`. Views are lazily created on first show and destroyed after 10 min of inactivity (sleep). The currently active (foreground) service is never destroyed.
+3. **Session isolation**: Each service gets its own `persist:service-{id}` partition, preserving login cookies across restarts.
+4. **IPC flow**: Renderer → preload (`window.api.*`) → ipcMain handlers → ServiceManager.
+5. **Proxy support**: Per-service proxy toggle with a shared proxy URL, applied via `session.setProxy()`.
 
 ## Conventions
 
@@ -51,6 +49,7 @@ All commands use `bun run`. Do NOT use `npm` or `npx` — Node.js is not install
 - electron-vite uses three separate Vite configs (main, preload, renderer) defined in `electron.vite.config.ts`
 - TypeScript has two project references: `tsconfig.node.json` (main + preload) and `tsconfig.web.json` (renderer)
 - Commits should be granular — one feature or fix per commit
+- Sidebar width is `w-14` (56px) in renderer, mirrored as `SIDEBAR_WIDTH_PX` constant in ServiceManager
 
 ## Gotchas
 
@@ -59,6 +58,5 @@ All commands use `bun run`. Do NOT use `npm` or `npx` — Node.js is not install
 - Renderer code lives at `src/renderer/src/` (note the nested `src/`), HTML entry is at `src/renderer/index.html`
 - Electron is a devDependency but ships its own Node.js runtime — build artifacts in `out/` use Electron's Node
 - The `@electron-toolkit/utils` export `is.dev` checks `ELECTRON_RENDERER_URL` env var set by electron-vite in dev mode
-- **Bridge DOM selectors are fragile**: AI services update their frontends frequently. When a bridge breaks, use the `diagnose-service` IPC handler to inspect the current DOM structure, then update selectors accordingly.
-- **Service views use `contextIsolation: false`**: The bridge preload (`src/preload/bridge.ts`) exposes `window.ipcRenderer` so injected scripts can send IPC messages back to main process.
-- **Kimi specifics**: Input is `div.chat-input-editor` (contenteditable); use `document.execCommand('insertText')` to trigger framework reactivity; responses appear in `.segment .markdown-container` after a route navigation.
+- **macOS lifecycle**: Window close (⌘W) destroys the BrowserWindow but keeps the app alive. ServiceManager nulls its `mainWindow` ref and cancels all sleep timers on `closed`. `app.on('activate')` recreates the window.
+- **backgroundThrottling: false**: Service views disable background throttling to prevent Electron from destroying webContents while the window is minimized.
