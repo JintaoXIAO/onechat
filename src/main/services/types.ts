@@ -39,7 +39,8 @@ export const BUILTIN_SERVICES: ServiceConfig[] = [
     name: 'ChatGLM',
     url: 'https://chatglm.cn'
   },
-  {
+/*
+{
     id: 'chatgpt',
     name: 'ChatGPT',
     url: 'https://chatgpt.com'
@@ -54,6 +55,7 @@ export const BUILTIN_SERVICES: ServiceConfig[] = [
     name: 'Grok',
     url: 'https://grok.com'
   },
+*/  
   {
     id: 'iciba',
     name: '金山词霸',
