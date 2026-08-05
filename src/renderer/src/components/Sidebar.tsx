@@ -10,6 +10,7 @@ import chatgptIcon from '../assets/icons/chatgpt.svg'
 import claudeIcon from '../assets/icons/claude.svg'
 import grokIcon from '../assets/icons/grok.svg'
 import icibaIcon from '../assets/icons/iciba.svg'
+import mimoIcon from '../assets/icons/mimo.png'
 
 interface SidebarProps {
   services: ServiceState[]
@@ -27,7 +28,8 @@ const SERVICE_ICONS: Record<string, string> = {
   chatgpt: chatgptIcon,
   claude: claudeIcon,
   grok: grokIcon,
-  iciba: icibaIcon
+  iciba: icibaIcon,
+  mimo: mimoIcon
 }
 
 const SERVICE_FALLBACK: Record<string, string> = {
@@ -38,7 +40,8 @@ const SERVICE_FALLBACK: Record<string, string> = {
   chatgpt: 'C',
   claude: 'Cl',
   grok: 'Gr',
-  iciba: '词'
+  iciba: '词',
+  mimo: 'M',
 }
 
 export function Sidebar({ services, activeId, onServiceClick, onSettingsClick, settingsActive }: SidebarProps) {

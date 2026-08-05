@@ -39,6 +39,11 @@ export const BUILTIN_SERVICES: ServiceConfig[] = [
     name: 'ChatGLM',
     url: 'https://chatglm.cn'
   },
+  {
+    id: 'mimo',
+    name: 'Mimo',
+    url: 'https://aistudio.xiaomimimo.com',
+  },
 /*
 {
     id: 'chatgpt',
