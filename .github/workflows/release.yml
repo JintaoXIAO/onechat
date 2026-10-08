@@ -3,25 +3,14 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        include:
-          - os: windows-latest
-            platform: win
-          - os: macos-latest
-            platform: mac
-          - os: ubuntu-latest
-            platform: linux
-
-    runs-on: ${{ matrix.os }}
-
+  build-linux:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,41 +20,32 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install dependencies
-        run: bun install
+      - name: Install rpm tooling
+        run: sudo apt-get update && sudo apt-get install -y rpm
 
-      - name: Build and package
-        run: bun run dist:${{ matrix.platform }} -- --publish never
+      - name: Install dependencies
+        env:
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+        run: bun install --frozen-lockfile
+
+      - name: Build and package (AppImage, deb, rpm)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bun run dist:linux
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.platform }}
+          name: linux-packages
           path: |
-            release/*.exe
-            release/*.dmg
-            release/*.zip
             release/*.AppImage
             release/*.deb
-          if-no-files-found: ignore
+            release/*.rpm
 
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-
-      - name: Create GitHub Release
+      - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: |
+            release/*.AppImage
+            release/*.deb
+            release/*.rpm

@@ -8,7 +8,6 @@
   },
   "main": "./out/main/index.js",
   "scripts": {
-    "postinstall": "electron-vite build",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
@@ -48,7 +47,7 @@
       "target": ["dmg", "zip"]
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": ["AppImage", "deb", "rpm"],
       "category": "Utility"
     }
   },
