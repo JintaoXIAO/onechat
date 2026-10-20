@@ -9,7 +9,6 @@ All your AI chats in one window. OneChat is a lightweight Electron desktop app t
 | Kimi | kimi.moonshot.cn |
 | 通义千问 (Qwen) | tongyi.aliyun.com/qianwen |
 | DeepSeek | chat.deepseek.com |
-| ChatGLM | chatglm.cn |
 | ChatGPT | chatgpt.com |
 | Claude | claude.ai |
 | Grok | grok.com |
@@ -18,6 +17,7 @@ All your AI chats in one window. OneChat is a lightweight Electron desktop app t
 ## Features
 
 - **Sidebar switching** — Click service icons to instantly switch between AI chats
+- **Custom services** — Add your own websites by name + URL from Settings; they persist across restarts
 - **Per-service proxy** — Configure HTTP/SOCKS5 proxy and enable it selectively (e.g. only for ChatGPT/Claude)
 - **Lazy loading** — Services only load when first clicked, keeping startup fast and memory low
 - **Auto sleep** — Inactive services are destroyed after 10 minutes to free memory; cookies persist across sleep

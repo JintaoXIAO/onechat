@@ -1,16 +1,14 @@
 import { ServiceState } from '../types'
 
 // Import service icons — place PNG/SVG files in src/renderer/src/assets/icons/
-// Filename should match service id: kimi.png, qwen.png, deepseek.png, chatglm.png
+// Filename should match service id: kimi.png, qwen.png, deepseek.png
 import kimiIcon from '../assets/icons/kimi.png'
 import qwenIcon from '../assets/icons/qwen.png'
 import deepseekIcon from '../assets/icons/deepseek.png'
-import chatglmIcon from '../assets/icons/chatglm.png'
 import chatgptIcon from '../assets/icons/chatgpt.svg'
 import claudeIcon from '../assets/icons/claude.svg'
 import grokIcon from '../assets/icons/grok.svg'
 import icibaIcon from '../assets/icons/iciba.svg'
-import mimoIcon from '../assets/icons/mimo.png'
 
 interface SidebarProps {
   services: ServiceState[]
@@ -24,24 +22,20 @@ const SERVICE_ICONS: Record<string, string> = {
   kimi: kimiIcon,
   qwen: qwenIcon,
   deepseek: deepseekIcon,
-  chatglm: chatglmIcon,
   chatgpt: chatgptIcon,
   claude: claudeIcon,
   grok: grokIcon,
-  iciba: icibaIcon,
-  mimo: mimoIcon
+  iciba: icibaIcon
 }
 
 const SERVICE_FALLBACK: Record<string, string> = {
   kimi: 'K',
   qwen: 'Q',
   deepseek: 'D',
-  chatglm: 'G',
   chatgpt: 'C',
   claude: 'Cl',
   grok: 'Gr',
-  iciba: '词',
-  mimo: 'M',
+  iciba: '词'
 }
 
 export function Sidebar({ services, activeId, onServiceClick, onSettingsClick, settingsActive }: SidebarProps) {

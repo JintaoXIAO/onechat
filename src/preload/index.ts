@@ -10,6 +10,8 @@ const api = {
   reloadService: (serviceId: string) => ipcRenderer.invoke('reload-service', serviceId),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   saveSettings: (settings: unknown) => ipcRenderer.invoke('save-settings', settings),
+  addCustomService: (config: unknown) => ipcRenderer.invoke('add-custom-service', config),
+  removeCustomService: (id: string) => ipcRenderer.invoke('remove-custom-service', id),
   onServiceStateChanged: (callback: (services: unknown[]) => void) => {
     // Remove all previous listeners to prevent stacking on HMR/reload
     ipcRenderer.removeAllListeners('service-state-changed')

@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain } from "electron";
 import { join } from "path";
 import { is } from "@electron-toolkit/utils";
 import { serviceManager, BUILTIN_SERVICES } from "./services";
-import { setupSettingsIPC } from "./settings";
+import { setupSettingsIPC, getCustomServices } from "./settings";
 
 // Global error handlers to prevent crash dialogs on macOS
 process.on("uncaughtException", (error) => {
@@ -87,6 +87,11 @@ app.whenReady().then(() => {
 
   // Register built-in services
   for (const config of BUILTIN_SERVICES) {
+    serviceManager.addService(config);
+  }
+
+  // Register user-defined custom services
+  for (const config of getCustomServices()) {
     serviceManager.addService(config);
   }
 

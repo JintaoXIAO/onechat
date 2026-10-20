@@ -34,16 +34,6 @@ export const BUILTIN_SERVICES: ServiceConfig[] = [
     name: 'DeepSeek',
     url: 'https://chat.deepseek.com'
   },
-  {
-    id: 'chatglm',
-    name: 'ChatGLM',
-    url: 'https://chatglm.cn'
-  },
-  {
-    id: 'mimo',
-    name: 'Mimo',
-    url: 'https://aistudio.xiaomimimo.com',
-  },
 /*
 {
     id: 'chatgpt',

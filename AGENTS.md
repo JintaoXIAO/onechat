@@ -2,7 +2,7 @@
 
 ## What is this
 
-AI chat aggregator built on Electron. Loads AI web services (Kimi, Qwen, DeepSeek, ChatGLM, ChatGPT, Claude, Grok, etc.) in WebContentsViews, providing a unified window with per-service session isolation and lazy loading.
+AI chat aggregator built on Electron. Loads AI web services (Kimi, Qwen, DeepSeek, ChatGPT, Claude, Grok, etc.) in WebContentsViews, providing a unified window with per-service session isolation and lazy loading. Users can also add custom services (name + URL) at runtime, persisted in settings.
 
 ## Tech stack
 
