@@ -82,7 +82,8 @@ bun run dist
 # Platform-specific
 bun run dist:win     # Windows — NSIS installer
 bun run dist:mac     # macOS — DMG + ZIP
-bun run dist:linux   # Linux — AppImage + DEB
+bun run dist:linux   # Linux — AppImage + DEB + RPM + Flatpak
+bun run dist:flatpak # Linux — Flatpak only
 ```
 
 Output in `release/`.
@@ -92,6 +93,13 @@ Output in `release/`.
 > $env:ELECTRON_BUILDER_BINARIES_MIRROR="https://npmmirror.com/mirrors/electron-builder-binaries/"
 > bun run dist
 > ```
+
+> **Flatpak note:** Flatpak can only be built on **Linux** (`flatpak` and `flatpak-builder` are Linux-only — they do not run on macOS/Windows). Install the build tools and Flathub remote first:
+> ```bash
+> sudo apt-get install -y flatpak flatpak-builder   # Debian/Ubuntu
+> flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+> ```
+> electron-builder auto-installs the required runtime/SDK/base (`org.freedesktop.Platform`, `org.freedesktop.Sdk`, `org.electronjs.Electron2.BaseApp` — version `25.08`) on first build. To build from macOS, use the `electronuserland/builder` Docker image (which runs Linux).
 
 ## Other Commands
 
