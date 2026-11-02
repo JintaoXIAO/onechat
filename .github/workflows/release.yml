@@ -23,14 +23,23 @@ jobs:
       - name: Install rpm tooling
         run: sudo apt-get update && sudo apt-get install -y rpm
 
+      - name: Install flatpak tooling
+        run: sudo apt-get install -y flatpak flatpak-builder
+
+      - name: Add Flathub remote (user scope)
+        run: |
+          flatpak remote-add --if-not-exists --user flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+
       - name: Install dependencies
         env:
           ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
         run: bun install --frozen-lockfile
 
-      - name: Build and package (AppImage, deb, rpm)
+      - name: Build and package (AppImage, deb, rpm, flatpak)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEBUG: "@malept/flatpak-bundler"
         run: bun run dist:linux
 
       - name: Upload artifacts
@@ -41,6 +50,7 @@ jobs:
             release/*.AppImage
             release/*.deb
             release/*.rpm
+            release/*.flatpak
 
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
@@ -49,3 +59,4 @@ jobs:
             release/*.AppImage
             release/*.deb
             release/*.rpm
+            release/*.flatpak
